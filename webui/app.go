@@ -388,10 +388,13 @@ func (a *App) Chat(pool *state.AgentPool) func(c *fiber.Ctx) error {
 
 		// Process the message asynchronously
 		go func() {
-			// Ask the agent for a response
-			jobOpts := []coreTypes.JobOption{coreTypes.WithText(message)}
-
-			// Attach conversation history if provided
+			// Ask the agent for a response.
+			//
+			// Ordering matters: NewJob applies JobOptions in sequence and
+			// WithConversationHistory *replaces* the conversation while
+			// WithText *appends* to it. Seed the history first (when provided)
+			// so the new user message lands last: [...history, message].
+			var jobOpts []coreTypes.JobOption
 			if len(payload.History) > 0 {
 				hist := make([]openai.ChatCompletionMessage, 0, len(payload.History))
 				for _, h := range payload.History {
@@ -402,6 +405,7 @@ func (a *App) Chat(pool *state.AgentPool) func(c *fiber.Ctx) error {
 				}
 				jobOpts = append(jobOpts, coreTypes.WithConversationHistory(hist))
 			}
+			jobOpts = append(jobOpts, coreTypes.WithText(message))
 
 			// Set conversation_id for cancel-previous-on-new-message
 			convID := payload.ConversationID
