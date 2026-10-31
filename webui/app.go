@@ -321,7 +321,12 @@ func (a *App) Chat(pool *state.AgentPool) func(c *fiber.Ctx) error {
 	return func(c *fiber.Ctx) error {
 		// Parse the request body
 		payload := struct {
-			Message string `json:"message"`
+			Message        string `json:"message"`
+			ConversationID string `json:"conversation_id,omitempty"`
+			History        []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"history,omitempty"`
 		}{}
 
 		if err := c.BodyParser(&payload); err != nil {
@@ -384,7 +389,30 @@ func (a *App) Chat(pool *state.AgentPool) func(c *fiber.Ctx) error {
 		// Process the message asynchronously
 		go func() {
 			// Ask the agent for a response
-			response := agent.Ask(coreTypes.WithText(message))
+			jobOpts := []coreTypes.JobOption{coreTypes.WithText(message)}
+
+			// Attach conversation history if provided
+			if len(payload.History) > 0 {
+				hist := make([]openai.ChatCompletionMessage, 0, len(payload.History))
+				for _, h := range payload.History {
+					hist = append(hist, openai.ChatCompletionMessage{
+						Role:    h.Role,
+						Content: h.Content,
+					})
+				}
+				jobOpts = append(jobOpts, coreTypes.WithConversationHistory(hist))
+			}
+
+			// Set conversation_id for cancel-previous-on-new-message
+			convID := payload.ConversationID
+			if convID == "" {
+				convID = "chat:" + agentName
+			}
+			jobOpts = append(jobOpts, coreTypes.WithMetadata(map[string]any{
+				coreTypes.MetadataKeyConversationID: convID,
+			}))
+
+			response := agent.Ask(jobOpts...)
 
 			if response == nil {
 				// Ask returned nil (e.g. context cancelled or WaitResult failed)

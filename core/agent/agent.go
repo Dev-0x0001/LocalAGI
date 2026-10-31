@@ -1216,6 +1216,7 @@ func (a *Agent) consumeJob(job *types.Job, role string) {
 	toolCorrectionAttempts := make(map[string]int)
 
 	cogitoOpts := []cogito.Option{
+		cogito.WithContext(job.GetContext()),
 		cogito.WithMCPs(a.liveMCPSessions()...),
 		cogito.WithMCPToolFilter(a.options.toolFilter.mcpToolFilter()),
 		cogito.WithTools(
