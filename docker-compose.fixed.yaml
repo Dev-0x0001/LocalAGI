@@ -1,0 +1,22 @@
+# Fixed LocalAGI — reuses an EXISTING LocalAI instance (does not start one).
+# Usage:
+#   docker compose -f docker-compose.fixed.yaml up -d
+# Override LocalAI endpoint + model via env or .env:
+#   LOCALAI_URL=http://host.docker.internal:8080/v1
+#   LOCALAGI_MODEL=qwen3.8-27b-heretic-abliterated-uncensored
+services:
+  localagi:
+    build:
+      context: .
+      dockerfile: Dockerfile.localagi
+    container_name: localagi-fixed
+    ports:
+      - "8081:3000"
+    environment:
+      - LOCALAGI_MODEL=${LOCALAGI_MODEL:-qwen3.8-27b-heretic-abliterated-uncensored}
+      - LOCALAGI_LLM_API_URL=${LOCALAI_URL:-http://172.19.0.1:8080/v1}
+      - LOCALAGI_LLM_API_KEY=${LOCALAI_KEY:-}
+      - LOCALAGI_DEBUG=${LOCALAGI_DEBUG:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

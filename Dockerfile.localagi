@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+# Stage 1: build the LocalAGI Go binary
+FROM golang:1.26 AS builder
+WORKDIR /work
+
+# Copy module manifests first for layer caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the rest of the source
+COPY . .
+
+# webui/routes.go has `//go:embed react-ui/dist/*` and that directory is
+# gitignored (built by bun in the official Dockerfile). It is absent in a
+# fresh clone, so create a minimal placeholder to satisfy the embed.
+# The HTTP API routes do not depend on the React UI, so a stub is sufficient
+# to compile and start the server.
+RUN mkdir -p webui/react-ui/dist && \
+    printf "<!doctype html><html><head><title>LocalAGI</title></head><body><div id=\"root\"></div></body></html>\n" > webui/react-ui/dist/index.html
+
+# Main package is at the repo root (main.go = package main).
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /localagi .
+
+# Stage 2: minimal runtime
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata
+WORKDIR /app
+COPY --from=builder /localagi /localagi
+EXPOSE 3000
+ENTRYPOINT ["/localagi", "serve"]
